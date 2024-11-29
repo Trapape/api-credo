@@ -1,0 +1,44 @@
+# Ignorar todo el directorio .yarn excepto algunos subdirectorios
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Ignorar la caché de Yarn para mantener el repositorio liviano
+.yarn/cache
+
+# Si estás usando Plug'n'Play (PnP), puedes mantener estos archivos descomentados
+.pnp.*
+
+# Ignorar node_modules para evitar almacenar dependencias en el repositorio
+node_modules/
+
+# Ignorar los archivos de entorno por seguridad (nunca almacenes .env en el repositorio)
+.env
+.env.local
+.env.*.local
+
+# Ignorar logs y archivos temporales
+*.log
+yarn-error.log
+
+# Ignorar configuraciones del editor de código
+.vscode/
+.idea/
+.DS_Store
+
+# Ignorar archivos de construcción y artefactos de compilación
+dist/
+build/
+
+# Ignorar archivos relacionados con Docker
+docker-compose.override.yml
+
+# Ignorar archivos de sistema
+Thumbs.db
+.DS_Store
+
+# Carpeta de apoyo de response
+doc_json
