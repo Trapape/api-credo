@@ -228,7 +228,7 @@ export class Issuer extends BaseAgent<{
     return issuer;
   }
 
-  public async createCredentialOffer(
+  /*public async createCredentialOffer(
     offeredCredentials: string[],
     options: {
       name?: string;
@@ -245,6 +245,37 @@ export class Issuer extends BaseAgent<{
         issuanceMetadata: {
           name: options.name,
           degree: options.degree,
+          issuanceDate: options.issuanceDate,
+          expirationDate: options.expirationDate,
+        },
+      });
+
+    return credentialOffer;
+  }*/
+
+  public async createCredentialOffer(
+    offeredCredentials: string[],
+    options: {
+      name?: string;
+      phone?: string;
+      email?: string;
+      institution_name?: string;
+      birth_date?: string;
+      issuanceDate?: string;
+      expirationDate?: string;
+    }
+  ) {
+    const { credentialOffer, issuanceSession } =
+      await this.agent.modules.openId4VcIssuer.createCredentialOffer({
+        issuerId: this.issuerRecord.issuerId,
+        offeredCredentials,
+        preAuthorizedCodeFlowConfig: { userPinRequired: false },
+        issuanceMetadata: {
+          name: options.name,
+          phone: options.phone,
+          email: options.email,
+          institution_name: options.institution_name,
+          birth_date: options.birth_date,
           issuanceDate: options.issuanceDate,
           expirationDate: options.expirationDate,
         },

@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import {
   credentialsSupported,
   Issuer,
-  universityDegreeCredential,
+  tantanCredential,
 } from "../models/Issuer";
 
 let issuerInstance: Issuer | null = null;
@@ -19,11 +19,14 @@ export async function createCredentialOffer(req: Request, res: Response) {
     const issuer = await getIssuerInstance();
 
     const {
-      credentialType = universityDegreeCredential.id,
+      credentialType = tantanCredential.id, // Cambiar a TantanCredential por defecto si es necesario
       issuanceDate,
       expirationDate,
       name,
-      degree,
+      phone,
+      email,
+      institution_name,
+      birth_date,
     } = req.body;
 
     /*const isValidDate = (date: any) => !isNaN(new Date(date).getTime());
@@ -53,11 +56,31 @@ export async function createCredentialOffer(req: Request, res: Response) {
       );
     }
 
+    // Validaciones adicionales
+    /*if (!name || typeof name !== "string" || name.trim() === "") {
+      throw new Error("The provided name is invalid.");
+    }
+    if (!phone || typeof phone !== "string" || phone.trim() === "") {
+      throw new Error("The provided phone is invalid.");
+    }
+    if (!email || typeof email !== "string" || email.trim() === "") {
+      throw new Error("The provided email is invalid.");
+    }
+    if (!institution_name || typeof institution_name !== "string") {
+      throw new Error("The provided institution_name is invalid.");
+    }
+    if (!birth_date || typeof birth_date !== "string") {
+      throw new Error("The provided birth_date is invalid.");
+    }*/
+
     const credentialOffer = await issuer.createCredentialOffer(
       [offeredCredential.id],
       {
         name,
-        degree,
+        phone,
+        email,
+        institution_name,
+        birth_date,
         issuanceDate,
         expirationDate,
       }
