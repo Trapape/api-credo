@@ -1,206 +1,262 @@
-import { Mdoc } from "@credo-ts/core";
+import {
+  DifPresentationExchangeService,
+  Mdoc,
+  W3cJsonLdVerifiableCredential,
+  W3cJwtVerifiableCredential,
+} from "@credo-ts/core";
+import { OpenId4VcSiopResolvedAuthorizationRequest } from "@credo-ts/openid4vc";
 import { Request, Response } from "express";
-import jwt from "jsonwebtoken";
 import MongoDB from "../config/db";
 import { Holder } from "../models/Holder";
-import { greenText } from "../utils/OutputClass";
+import { UnifiedAgent } from "../types/UnifiedAgent";
 
-let holderInstance: Holder | null = null;
+export class HolderController {
+  private agent: UnifiedAgent;
 
-export async function getHolderInstance() {
-  if (!holderInstance) {
-    holderInstance = await Holder.build();
+  constructor(agent: UnifiedAgent) {
+    this.agent = agent;
   }
-  return holderInstance;
-}
 
-export async function resolveCredentialOffer(req: Request, res: Response) {
-  try {
-    const { credentialOffer } = req.body;
-    if (!credentialOffer) throw new Error("credentialOffer is required.");
+  public async resolveCredentialOffer(req: Request, res: Response) {
+    try {
+      const { credentialOffer } = req.body;
+      if (!credentialOffer) throw new Error("credentialOffer is required.");
 
-    const holder = await getHolderInstance();
-    const resolvedCredentialOffer = await holder.resolveCredentialOffer(
-      credentialOffer
-    );
+      // Usar ConsolidatedAgent para resolver la oferta de credenciales
+      const resolvedCredentialOffer =
+        await this.agent.agent.modules.openId4VcHolder.resolveCredentialOffer(
+          credentialOffer
+        );
 
-    res.json({
-      resolvedCredentialOffer: resolvedCredentialOffer,
-      credentialsToRequest: resolvedCredentialOffer.offeredCredentials.map(
-        (credential) => credential.id
-      ),
-    });
-  } catch (error: any) {
-    res
-      .status(500)
-      .json({ error: error.message || "Failed to resolve credential offer." });
+      res.json({
+        resolvedCredentialOffer: resolvedCredentialOffer,
+        credentialsToRequest: resolvedCredentialOffer.offeredCredentials.map(
+          (credential: { id: any }) => credential.id
+        ),
+      });
+    } catch (error: any) {
+      if (!res.headersSent) {
+        // Evita enviar múltiples respuestas
+        res.status(500).json({
+          error: error.message || "Failed to resolve credential offer.",
+        });
+      } else {
+        console.error("Respuesta ya enviada:", error);
+      }
+    }
   }
-}
 
-export async function requestCredential(req: Request, res: Response) {
-  try {
-    const { resolvedCredentialOffer, credentialsToRequest } = req.body;
+  public async requestCredential(req: Request, res: Response) {
+    try {
+      const { resolvedCredentialOffer, credentialsToRequest } = req.body;
 
-    if (!resolvedCredentialOffer)
-      throw new Error("resolvedCredentialOffer is required.");
-    if (!credentialsToRequest)
-      throw new Error("credentialsToRequest is required.");
+      // Validaciones iniciales
+      if (!resolvedCredentialOffer) {
+        throw new Error("resolvedCredentialOffer is required.");
+      }
+      if (!credentialsToRequest) {
+        throw new Error("credentialsToRequest is required.");
+      }
 
-    const holder = await getHolderInstance();
+      // Validar presencia de campos obligatorios en la oferta de credenciales
+      const metadata = resolvedCredentialOffer.metadata;
+      if (!metadata || !metadata.token_endpoint) {
+        throw new Error(
+          "Missing token_endpoint in resolvedCredentialOffer.metadata"
+        );
+      }
+      if (!metadata.credential_endpoint) {
+        throw new Error(
+          "Missing credential_endpoint in resolvedCredentialOffer.metadata"
+        );
+      }
+      if (!metadata.credentialIssuerMetadata) {
+        throw new Error(
+          "Missing credentialIssuerMetadata in resolvedCredentialOffer.metadata"
+        );
+      }
 
-    const credentials = await holder.requestAndStoreCredentials(
-      resolvedCredentialOffer,
-      credentialsToRequest
-    );
+      // Solicitar un token
+      const tokenResponse =
+        await this.agent.agent.modules.openId4VcHolder.requestToken({
+          resolvedCredentialOffer,
+        });
 
-    res.json({
-      message: "Credential stored successfully",
-      credentials: credentials.map((credential: any) =>
-        formatCredential(credential)
-      ),
-    });
-  } catch (error: any) {
-    res
-      .status(500)
-      .json({ error: error.message || "Failed to request credential." });
-  }
-}
+      if (!tokenResponse || !tokenResponse.accessToken) {
+        throw new Error("Failed to obtain access token");
+      }
 
-export async function resolveProofRequest(req: Request, res: Response) {
-  try {
-    const { proofRequestUri } = req.body;
-    if (!proofRequestUri) throw new Error("proofRequestUri is required");
+      // Solicitar las credenciales
+      const credentialResponse =
+        await this.agent.agent.modules.openId4VcHolder.requestCredentials({
+          resolvedCredentialOffer,
+          ...tokenResponse,
+          credentialsToRequest,
+          credentialBindingResolver: async () => ({
+            method: "did",
+            didUrl: this.agent.verificationMethod?.id || "",
+          }),
+        });
 
-    const holder = await getHolderInstance();
-    const resolvedPresentationRequest = await holder.resolveProofRequest(
-      proofRequestUri
-    );
-
-    if (!resolvedPresentationRequest)
-      throw new Error("No valid proof request resolved.");
-
-    const presentationDefinition =
-      resolvedPresentationRequest.presentationExchange?.definition;
-    const credentialsReady =
-      resolvedPresentationRequest.presentationExchange?.credentialsForRequest
-        ?.areRequirementsSatisfied;
-
-    if (!credentialsReady)
-      throw new Error(
-        "No credentials available that satisfy the proof request."
+      // Almacenar las credenciales obtenidas
+      const storedCredentials = await Promise.all(
+        credentialResponse.map(async (response: { credential: any }) => {
+          const credential = response.credential;
+          if (
+            credential instanceof W3cJwtVerifiableCredential ||
+            credential instanceof W3cJsonLdVerifiableCredential
+          ) {
+            return this.agent.agent.w3cCredentials.storeCredential({
+              credential,
+            });
+          } else if (credential instanceof Mdoc) {
+            return this.agent.agent.mdoc.store(credential);
+          } else {
+            return this.agent.agent.sdJwtVc.store(credential.compact);
+          }
+        })
       );
 
-    const stateId = `resolved:${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(7)}`;
-    const db = MongoDB.getDb();
-    const collection = db.collection("resolvedRequests");
-
-    await collection.insertOne({
-      id: stateId,
-      status: "pending",
-      createdAt: new Date(),
-      proofRequestUri,
-    });
-
-    res.json({
-      message: "Proof request resolved",
-      presentationPurpose: presentationDefinition?.purpose,
-      credentialsReady: true,
-      stateId,
-    });
-  } catch (error: any) {
-    res
-      .status(500)
-      .json({ error: error.message || "Failed to resolve proof request." });
-  }
-}
-
-export async function acceptPresentationRequest(req: Request, res: Response) {
-  try {
-    const { stateId } = req.body;
-
-    if (!stateId) throw new Error("stateId is required");
-
-    const db = MongoDB.getDb();
-    const collection = db.collection("resolvedRequests");
-
-    const storedRequest = await collection.findOneAndUpdate(
-      { id: stateId, status: "pending" },
-      { $set: { status: "used" } },
-      { returnDocument: "after" }
-    );
-
-    console.log(greenText(JSON.stringify(storedRequest)));
-
-    if (!storedRequest)
-      throw new Error("Proof request not found, expired, or already used.");
-
-    const holder = await getHolderInstance();
-    const resolvedPresentationRequest = await holder.resolveProofRequest(
-      storedRequest.proofRequestUri
-    );
-    const acceptPresentationRequestResponse =
-      await holder.acceptPresentationRequest(resolvedPresentationRequest);
-
-    if (
-      acceptPresentationRequestResponse.serverResponse.status >= 200 &&
-      acceptPresentationRequestResponse.serverResponse.status < 300
-    ) {
+      // Formatear y devolver las credenciales almacenadas
       res.json({
-        message: "Presentation accepted successfully",
-        acceptPresentationRequestResponse,
+        message: "Credential stored successfully",
+        credentials: storedCredentials.map((credential) =>
+          Holder.formatCredential(credential, this.agent)
+        ),
       });
-    } else {
-      res.json({
-        message: "received error status code",
-        acceptPresentationRequestResponse,
+    } catch (error: any) {
+      res.status(500).json({
+        error: error.message || "Failed to request credential.",
       });
     }
-  } catch (error: any) {
-    res
-      .status(500)
-      .json({ error: error || "Failed to accept presentation request." });
   }
-}
 
-function formatCredential(credential: any) {
-  if (credential.type === "W3cCredentialRecord") {
-    return {
-      type: "W3cCredentialRecord",
-      claimFormat: credential.credential.claimFormat,
-      jsonCredential: credential.credential.jsonCredential,
-    };
-  } else if (credential.type === "MdocRecord") {
-    const namespaces = Mdoc.fromBase64Url(
-      credential.base64Url
-    ).issuerSignedNamespaces;
-    return {
-      type: "MdocRecord",
-      namespaces: namespaces,
-    };
-  } else if (credential.type === "SdJwtVcRecord") {
-    const prettyClaims = credential.agent.sdJwtVc.fromCompact(
-      credential.compactSdJwtVc
-    ).prettyClaims;
-    return {
-      type: "SdJwtVcRecord",
-      claims: prettyClaims,
-    };
-  } else if (
-    credential.type === "W3cJwtVerifiableCredential" ||
-    credential.type === "W3cJsonLdVerifiableCredential"
-  ) {
-    const decodedCredential = jwt.decode(
-      credential.jsonCredential || credential.compact,
-      { json: true }
-    );
-    return {
-      type: credential.type,
-      credential:
-        decodedCredential || credential.jsonCredential || credential.compact,
-    };
-  } else {
-    return credential;
+  public async resolveProofRequest(req: Request, res: Response) {
+    try {
+      const { proofRequestUri } = req.body;
+      if (!proofRequestUri) throw new Error("proofRequestUri is required");
+
+      // Usar ConsolidatedAgent para resolver una solicitud de prueba
+      const resolvedProofRequest =
+        await this.agent.agent.modules.openId4VcHolder.resolveSiopAuthorizationRequest(
+          proofRequestUri
+        );
+
+      if (!resolvedProofRequest)
+        throw new Error("No valid proof request resolved.");
+
+      const presentationDefinition =
+        resolvedProofRequest.presentationExchange?.definition;
+      const credentialsReady =
+        resolvedProofRequest.presentationExchange?.credentialsForRequest
+          ?.areRequirementsSatisfied;
+
+      if (!credentialsReady) {
+        throw new Error(
+          "No credentials available that satisfy the proof request."
+        );
+      }
+
+      const stateId = `resolved:${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(7)}`;
+
+      const db = MongoDB.getDb();
+      const collection = db.collection("resolvedRequests");
+
+      await collection.insertOne({
+        id: stateId,
+        status: "pending",
+        createdAt: new Date(),
+        proofRequestUri,
+        stateId,
+      });
+
+      res.json({
+        message: "Proof request resolved",
+        presentationPurpose: presentationDefinition?.purpose,
+        credentialsReady: credentialsReady || false,
+        stateId,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        error: error.message || "Failed to resolve proof request.",
+      });
+    }
+  }
+
+  public async acceptPresentationRequest(req: Request, res: Response) {
+    try {
+      const { stateId } = req.body;
+
+      if (!stateId) throw new Error("stateId is required.");
+
+      const db = MongoDB.getDb();
+      const collection = db.collection("resolvedRequests");
+
+      const storedRequest = await collection.findOneAndUpdate(
+        { id: stateId, status: "pending" },
+        { $set: { status: "used" } },
+        { returnDocument: "after" }
+      );
+
+      if (!storedRequest)
+        throw new Error("Proof request not found, expired, or already used.");
+
+      const resolvedPresentationRequest: OpenId4VcSiopResolvedAuthorizationRequest =
+        await this.agent.agent.modules.openId4VcHolder.resolveSiopAuthorizationRequest(
+          storedRequest.proofRequestUri
+        );
+
+      if (!resolvedPresentationRequest.presentationExchange) {
+        throw new Error(
+          "Missing presentation exchange on resolved authorization request."
+        );
+      }
+
+      // Resolver el servicio de intercambio de presentaciones
+      const presentationExchangeService =
+        this.agent.agent.dependencyManager.resolve(
+          DifPresentationExchangeService
+        );
+
+      // Seleccionar credenciales para la solicitud de presentación
+      const credentials =
+        presentationExchangeService.selectCredentialsForRequest(
+          resolvedPresentationRequest.presentationExchange.credentialsForRequest
+        );
+
+      // Aceptar la solicitud de presentación
+      const acceptPresentationRequestResponse =
+        await this.agent.agent.modules.openId4VcHolder.acceptSiopAuthorizationRequest(
+          {
+            authorizationRequest:
+              resolvedPresentationRequest.authorizationRequest,
+            presentationExchange: {
+              credentials,
+            },
+          }
+        );
+
+      // Verificar el estado de la respuesta y devolver el resultado
+      if (
+        acceptPresentationRequestResponse.serverResponse.status >= 200 &&
+        acceptPresentationRequestResponse.serverResponse.status < 300
+      ) {
+        res.json({
+          message: "Presentation accepted successfully",
+          acceptPresentationRequestResponse,
+        });
+      } else {
+        res.status(400).json({
+          message: "Received error status code",
+          acceptPresentationRequestResponse,
+        });
+      }
+    } catch (error: any) {
+      res.status(500).json({
+        error: error.message || "Failed to accept presentation request.",
+      });
+    }
   }
 }

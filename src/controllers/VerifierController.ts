@@ -1,50 +1,47 @@
 import { Request, Response } from "express";
-import { Verifier, presentationDefinitions } from "../models/Verifier";
+import { presentationDefinitions } from "../models/Verifier";
+import { UnifiedAgent } from "../types/UnifiedAgent";
 
-let verifierInstance: Verifier | null = null;
+export class VerifierController {
+  private agent: UnifiedAgent;
 
-export async function getVerifierInstance() {
-  if (!verifierInstance) {
-    verifierInstance = await Verifier.build();
+  constructor(agent: UnifiedAgent) {
+    this.agent = agent;
   }
-  return verifierInstance;
-}
 
-export async function createProofRequest(req: Request, res: Response) {
-  try {
-    const { credentialType = "UniversityDegreeCredential" } = req.body;
+  public async createProofRequest(req: Request, res: Response) {
+    try {
+      const { credentialType = "UniversityDegreeCredential" } = req.body;
 
-    const presentationDefinition = presentationDefinitions.find(
-      (def) => def.id === credentialType
-    );
-    if (!presentationDefinition) {
-      throw new Error(
-        `No presentation definition found for credential type: ${credentialType}`
+      // Buscar la definición de presentación para el tipo de credencial
+      const presentationDefinition = presentationDefinitions.find(
+        (def) => def.id === credentialType
       );
+      if (!presentationDefinition)
+        throw new Error(
+          `No presentation definition found for credential type: ${credentialType}`
+        );
+
+      // Crear la solicitud de prueba utilizando el agente consolidado
+      const proofRequestUri =
+        await this.agent.agent.modules.openId4VcVerifier.createAuthorizationRequest(
+          {
+            requestSigner: {
+              method: "did",
+              didUrl: this.agent.verificationMethod?.id || "",
+            },
+            verifierId: this.agent.verifierRecord.verifierId,
+            presentationExchange: {
+              definition: presentationDefinition,
+            },
+          }
+        );
+
+      res.json({ proofRequestUri });
+    } catch (error: any) {
+      res.status(500).json({
+        error: error.message || "Failed to create proof request.",
+      });
     }
-
-    const verifier = await getVerifierInstance();
-    const proofRequestUri = await verifier.createProofRequest(
-      presentationDefinition
-    );
-
-    res.json({ proofRequestUri });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-}
-
-// Endpoint para procesar credencial MDL a partir de QR
-export async function decodeMDLQR(req: Request, res: Response) {
-  try {
-    const { qrCode } = req.body;
-    const verifier = await getVerifierInstance();
-    const decodedData = await verifier.decodeAndValidateQRCode(qrCode);
-    res.status(200).json({
-      message: "QR decodificado exitosamente",
-      data: decodedData,
-    });
-  } catch (error: any) {
-    res.status(400).json({ message: error.message });
   }
 }
