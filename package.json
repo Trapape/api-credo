@@ -1,6 +1,6 @@
 {
   "name": "api-credo",
-  "packageManager": "yarn@3.6.4",
+  "packageManager": "yarn@4.5.3",
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
@@ -16,7 +16,6 @@
     "@hyperledger/anoncreds-nodejs": "^0.2.2",
     "@hyperledger/aries-askar-nodejs": "^0.2.1",
     "@hyperledger/indy-vdr-nodejs": "^0.2.2",
-    "@types/express": "^4.17.15",
     "body-parser": "^1.20.1",
     "cbor": "^10.0.2",
     "cose-js": "^0.9.0",
@@ -27,21 +26,27 @@
     "jose": "^5.9.6",
     "jsonwebtoken": "^9.0.2",
     "jwk-to-pem": "^2.0.6",
-    "mongodb": "^6.10.0"
+    "mongodb": "^6.10.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
+    "@types/express": "4.17.21",
     "@types/figlet": "^1.7.0",
     "@types/inquirer": "8.2.6",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/jwk-to-pem": "^2.0.3",
     "@types/node": "^22.8.6",
+    "@types/swagger-jsdoc": "^6",
+    "@types/swagger-ui-express": "^4.1.7",
     "nodemon": "^3.1.7",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
   },
   "resolutions": {
-    "@protokoll/mdoc-client": "0.2.33"
+    "@protokoll/mdoc-client": "0.2.33",
+    "@types/express": "4.17.21",
+    "@types/express-serve-static-core": "4.19.6"
   }
 }

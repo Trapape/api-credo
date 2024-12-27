@@ -1,5 +1,8 @@
 import "dotenv/config";
-import express, { Router } from "express";
+import express, { NextFunction, Request, Response, Router } from "express";
+import path from "path";
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
 import MongoDB from "./config/db";
 import { HolderController } from "./controllers/HolderController";
 import { IssuerController } from "./controllers/IssuerController";
@@ -15,6 +18,22 @@ const app = express();
 app.use(express.json());
 app.use("/oid4vci", issuerRouter);
 app.use("/siop", verifierRouter);
+
+const swaggerOptions = {
+  definition: {
+    openapi: "3.0.0",
+    info: {
+      title: "API de Credenciales Verificables",
+      version: "1.0.0",
+      description:
+        "API para la emisión y verificación de credenciales verificables utilizando OpenID4VC.",
+    },
+  },
+  apis: [path.join(__dirname, "../swagger.yaml")],
+};
+
+const swaggerDocs = swaggerJsdoc(swaggerOptions);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 async function initializeAgents() {
   console.log("Inicializando el agente consolidado...");
@@ -71,6 +90,11 @@ async function initializeAgents() {
     verifierController.createProofRequest.bind(verifierController)
   );
 
+  // Nueva ruta /health/live
+  app.get("/health/live", (req: Request, res: Response, next: NextFunction) => {
+    res.status(200).send("OK");
+  });
+
   app.use((req, res, next) => {
     if (!res.headersSent) {
       // Verifica que no se haya enviado ya una respuesta
@@ -94,7 +118,7 @@ async function main() {
 
     // Ahora que el servidor está activo, registra los transportes del agente
     try {
-      await unifiedAgent.registerTransports();
+      await unifiedAgent.registerTransports(app);
       console.log("Transportes del agente registrados correctamente.");
     } catch (error) {
       console.error("Error al registrar los transportes:", error);

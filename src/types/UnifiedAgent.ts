@@ -40,7 +40,6 @@ export class UnifiedAgent {
   public verifierRecord: any;
   private issuerRouter: Router;
   private verifierRouter: Router;
-  public app: Express;
 
   constructor(
     name: string,
@@ -54,7 +53,6 @@ export class UnifiedAgent {
     this.DID_FILE = "./did-data.json";
     this.issuerRouter = _issuerRouter;
     this.verifierRouter = _verifierRouter;
-    this.app = _app;
 
     const config = {
       label: name,
@@ -91,11 +89,11 @@ export class UnifiedAgent {
     });
   }
 
-  public async registerTransports() {
+  public async registerTransports(_app: Express) {
     console.log("Registrando transportes para el agente...");
 
     const httpInboundTransport = new HttpInboundTransport({
-      app: this.app, // Usa la instancia de Express
+      app: _app, // Usa la instancia de Express
       port: Number(process.env.API_PORT) || 3000,
     });
 
