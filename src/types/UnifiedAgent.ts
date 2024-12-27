@@ -48,7 +48,8 @@ export class UnifiedAgent {
     _verifierRouter: Router
   ) {
     console.log("UnifiedAgent constructor llamado");
-    const baseUrl = `${process.env.BASE_URL}:${process.env.API_PORT || 3000}`;
+    //const baseUrl = `${process.env.BASE_URL}:${process.env.API_PORT || 3000}`;
+    const baseUrl = `${process.env.BASE_URL}`;
     this.name = name;
     this.DID_FILE = "./did-data.json";
     this.issuerRouter = _issuerRouter;
