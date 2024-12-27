@@ -16,6 +16,7 @@ const verifierRouter = Router();
 const issuerRouter = Router();
 const app = express();
 app.use(express.json());
+app.use(cors());
 app.use("/oid4vci", issuerRouter);
 app.use("/siop", verifierRouter);
 
@@ -128,3 +129,6 @@ async function main() {
 }
 
 main();
+function cors(): any {
+  throw new Error("Function not implemented.");
+}
