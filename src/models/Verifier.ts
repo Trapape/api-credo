@@ -1,3 +1,23 @@
+const genericPresentationDefinition = {
+  id: "genericCredential",
+  purpose: "Present a credential to verify your identity.",
+  input_descriptors: [
+    {
+      id: "GenericCredentialDescriptor",
+      constraints: {
+        fields: [
+          {
+            path: ["$.vc.type.*", "$.type"],
+            filter: {
+              type: "string",
+            },
+          },
+        ],
+      },
+    },
+  ],
+};
+
 const universityDegreePresentationDefinition = {
   id: "UniversityDegreeCredential",
   purpose:
@@ -63,6 +83,7 @@ const tantanPresentationDefinition = {
 };
 
 export const presentationDefinitions = [
+  genericPresentationDefinition,
   universityDegreePresentationDefinition,
   openBadgeCredentialPresentationDefinition,
   tantanPresentationDefinition,

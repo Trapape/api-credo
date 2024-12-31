@@ -1,9 +1,4 @@
-import {
-  DifPresentationExchangeService,
-  Mdoc,
-  W3cJsonLdVerifiableCredential,
-  W3cJwtVerifiableCredential,
-} from "@credo-ts/core";
+import { DifPresentationExchangeService } from "@credo-ts/core";
 import { OpenId4VcSiopResolvedAuthorizationRequest } from "@credo-ts/openid4vc";
 import { Request, Response } from "express";
 import MongoDB from "../config/db";
@@ -99,7 +94,7 @@ export class HolderController {
         });
 
       // Almacenar las credenciales obtenidas
-      const storedCredentials = await Promise.all(
+      /*const storedCredentials = await Promise.all(
         credentialResponse.map(async (response: { credential: any }) => {
           const credential = response.credential;
           if (
@@ -115,13 +110,16 @@ export class HolderController {
             return this.agent.agent.sdJwtVc.store(credential.compact);
           }
         })
-      );
+      );*/
 
       // Formatear y devolver las credenciales almacenadas
       res.json({
-        message: "Credential stored successfully",
-        credentials: storedCredentials.map((credential) =>
+        message: "Credential obtained successfully",
+        /*credentials: storedCredentials.map((credential) =>
           Holder.formatCredential(credential, this.agent)
+        ),*/
+        credentials: credentialResponse.map((response: { credential: any }) =>
+          Holder.formatCredential(response.credential, this.agent)
         ),
       });
     } catch (error: any) {
@@ -151,11 +149,11 @@ export class HolderController {
         resolvedProofRequest.presentationExchange?.credentialsForRequest
           ?.areRequirementsSatisfied;
 
-      if (!credentialsReady) {
+      /*if (!credentialsReady) {
         throw new Error(
           "No credentials available that satisfy the proof request."
         );
-      }
+      }*/
 
       const stateId = `resolved:${Date.now()}-${Math.random()
         .toString(36)

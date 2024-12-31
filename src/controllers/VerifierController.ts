@@ -11,16 +11,25 @@ export class VerifierController {
 
   public async createProofRequest(req: Request, res: Response) {
     try {
-      const { credentialType = "UniversityDegreeCredential" } = req.body;
-
-      // Buscar la definición de presentación para el tipo de credencial
-      const presentationDefinition = presentationDefinitions.find(
-        (def) => def.id === credentialType
-      );
-      if (!presentationDefinition)
-        throw new Error(
-          `No presentation definition found for credential type: ${credentialType}`
+      const { credentialType } = req.body;
+      let presentationDefinition;
+      if (credentialType) {
+        presentationDefinition = presentationDefinitions.find(
+          (def) => def.id === credentialType
         );
+        if (!presentationDefinition)
+          throw new Error(
+            `No presentation definition found for credential type: ${credentialType}`
+          );
+      } else {
+        presentationDefinition = presentationDefinitions.find(
+          (def) => def.id === "genericCredential"
+        );
+        if (!presentationDefinition)
+          throw new Error(
+            `No presentation definition found for generic credential`
+          );
+      }
 
       // Crear la solicitud de prueba utilizando el agente consolidado
       const proofRequestUri =
